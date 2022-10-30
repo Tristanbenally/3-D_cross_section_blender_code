@@ -1,0 +1,193 @@
+import bpy
+import re #Regular Expressions package
+
+radii=[] #Set up the lists we need to put data in
+phase=[]
+with open('<path> filename') as file: #open file
+    lines = file.readlines()
+    for line in lines[len(lines):1:-1]: #Read file backwards and last line
+        line = line.strip()
+        div=re.split('\t',line) #Splits each line at tabs - aka splits up columns
+        #IF ERROR OCCURES check if file has a blank line at bottom and delete it
+        radii.append(float(div[1])) #radii in column 1 change to float
+        phase.append(div[6]) #phase name in colun 6
+
+dummyphase='name' #Set up a variable to compare to
+rofphasechange=[] #Save radii whenever the phase changes
+for i in range(len(phase)):
+    if phase[i]!=dummyphase: #check if phase changes
+        rofphasechange.append(radii[i])
+        dummyphase=phase[i]
+# this gets desired values for indicator for boundaries
+
+dummyphase1='name'
+rofphasechange1=[]
+for i in range(len(phase)):
+    if phase[i]!=dummyphase1:
+        rofphasechange1.append(phase[i])
+        dummyphase1=phase[i]
+
+#gets a (radius,phase) pair 
+
+import bpy
+print(rofphasechange)
+rof = rofphasechange[0]
+print(rof)
+#needed for the position for colorRamp as it can only go to 1
+my_divisor = 3
+rof1 = [x/ my_divisor for x in rofphasechange]
+print(rof1)
+
+rof_ = rof1[0]
+print(rof_)
+#generates prmitive sphere
+bpy.ops.mesh.primitive_uv_sphere_add(radius = rof_, enter_editmode=False, align='WORLD', location=(0,0,0), scale=(1,1,1))
+#adds modifier to primitive sphere with thickness equal to largest radii
+bpy.ops.object.modifier_add(type='SOLIDIFY')
+bpy.context.object.modifiers["Solidify"].thickness = rof_
+
+# To smooth the shading of the uv sphere
+bpy.ops.object.shade_smooth()
+#adds boolean modifier to cut through sphere using cylinder
+bpy.ops.object.modifier_add(type='BOOLEAN')
+bpy.ops.mesh.primitive_cylinder_add(radius=(rof_+0.2), depth=(rof_), enter_editmode=False, align='WORLD', location=(0,0,(rof_/2)))
+# to make circles as a incidator for bounds
+for a in rof1:
+    bpy.ops.mesh.primitive_circle_add(radius=a, enter_editmode=False, align='WORLD', location=(0,0,0), scale=(1,1,1))
+#selects sphere
+bpy.data.objects["Sphere"].select_set(True)
+#sets selected sphere as active object for modifier
+bpy.context.view_layer.objects.active = bpy.data.objects['Sphere']
+#assigns the cylinder as the object that will 'cut' the sphere as desired difference
+bpy.context.object.modifiers["Boolean"].object = bpy.data.objects["Cylinder"]
+#applies the boolean difference 
+bpy.ops.object.modifier_apply(modifier="Boolean")
+#de-selects all objects 
+bpy.ops.object.select_all(action='DESELECT')
+#only selects the cylinder 
+bpy.data.objects["Cylinder"].select_set(True)
+#deletes selected object
+bpy.ops.object.delete()
+#selects sphere
+bpy.data.objects["Sphere"].select_set(True)
+#code to assign the sphere to have a material
+new_mat = bpy.data.materials.new(name="MyMat") 
+bpy.context.object.data.materials.append(new_mat) 
+bpy.context.object.active_material_index = 1
+#sets use of nodes to be true
+new_mat.use_nodes = True
+nodes = new_mat.node_tree.nodes
+#creates the node for each one
+Tex_Coord = nodes.new(type='ShaderNodeTexCoord')
+#location of node in shader editor
+Tex_Coord.location = (726,339)
+Mapping = nodes.new(type='ShaderNodeMapping')
+
+Tex_Grad = nodes.new(type='ShaderNodeTexGradient')
+#sets color gradient to be radial
+Tex_Grad.gradient_type = 'SPHERICAL'
+
+colorRamp = nodes.new(type='ShaderNodeValToRGB')
+
+Principled_BSDF = nodes.new(type='ShaderNodeBsdfPrincipled')
+
+Material_Output = nodes.new(type='ShaderNodeOutputMaterial')
+
+
+rof2 = len(rofphasechange)
+print(rof2)
+
+
+print(rof1)
+rof3 = [1-x for x in rof1]
+print(rof3)
+
+links = new_mat.node_tree.links
+new_link = links.new(Tex_Coord.outputs[3], Mapping.inputs[0])
+new_link1 = links.new(Mapping.outputs[0], Tex_Grad.inputs[0])
+new_link2 = links.new(Tex_Grad.outputs[1], colorRamp.inputs[0])
+new_link3 = links.new(colorRamp.outputs[0], Principled_BSDF.inputs[0])
+new_link4 = links.new(Principled_BSDF.outputs[0], Material_Output.inputs[0])
+#reverses order of diminished radii values for colorRamp 
+my_divisor = 3
+rof1 = [x/ my_divisor for x in rofphasechange]
+print(rof1)
+type(rof1)
+rof3 = [1-x for x in rof1]
+print(rof3)
+combined_rof = zip(rof3,rofphasechange1)
+#combines both radii and name of EOS into a pair
+pair_rof = list(combined_rof)
+print(pair_rof)
+#dictionary of colors in colorRamp
+colors = {'dark-red': (0.553003, 0.00160116, 0, 1), 'red':( 1,0.00208147, 0, 1), 'dim-orange': ( 0.516357,0.0231271, 0, 1), 'orange': ( 1, 0.0398916, 0, 1), 'mid-OW': ( 1, 0.110274, 0, 1), 'mid-yellow': ( 1, 0.345783, 0, 1), 'mid-yellows': ( 1, 0.589508, 0, 1), 'yellow': ( 1, 0.948097, 0.000862944, 1), 'magneta': (1, 0, 0.618149, 1), 'purple': ( 0.299451, 0, 1, 1), 'blue': ( 0, 0.00439054, 1, 1)}
+#list of conditionals for assignment of color based on name of EOS 
+for i in pair_rof:
+    colorRamp.color_ramp.elements.new(i[0])
+    if i[1] == " Fe hcp (Smith)":
+        print("yes")
+        index = pair_rof.index(i)
+        position = print(index)
+        colorRamp.color_ramp.elements[index+1].color = colors['dark-red'] #red
+    if i[1] == " Si PPv (Sakai)":
+        print("yes")
+        index = pair_rof.index(i)
+        position = print(index)
+        colorRamp.color_ramp.elements[index+1].color = colors['red']
+        
+    if i[1] == " Pv (Dorogokupets)":
+        print("yes")
+        index = pair_rof.index(i)
+        position = print(index)
+        colorRamp.color_ramp.elements[index+1].color = colors['dim-orange'] #magenta
+    if i[1] == " Wds (Dorogokupets)":
+        print("yes")
+        index = pair_rof.index(i)
+        position = print(index)
+        colorRamp.color_ramp.elements[index+1].color = colors['orange']
+    if i[1] == " Fo/Ol (Dorogokupets)":
+        print("yes")
+        index = pair_rof.index(i)
+        position = print(index)
+        colorRamp.color_ramp.elements[index+1].color = colors['mid-OW']
+    if i[1] == " Si liquid (Wolf)":
+        print("yes")
+        index = pair_rof.index(i)
+        position = print(index)
+        colorRamp.color_ramp.elements[index+1].color = colors['mid-yellow'] #turqiose but eliminates the rest
+    if i[1] == " Si Pv (Oganov)":
+        print("yes")
+        index = pair_rof.index(i)
+        position = print(index)
+        colorRamp.color_ramp.elements[index+1].color = colors['mid-yellows']
+    if i[1] == " Rwd (Dorogokupets)":
+        print("yes")
+        index = pair_rof.index(i)
+        position = print(index)
+        colorRamp.color_ramp.elements[index+1].color = colors['yellow']
+    if i[1] == " Ice VII (Bezacier)":
+        print("yes")
+        index = pair_rof.index(i)
+        position = print(index)
+        colorRamp.color_ramp.elements[index+1].color = colors['magneta']
+    if i[1] == " Ice VI (Bezacier)":
+        print("yes")
+        index = pair_rof.index(i)
+        position = print(index)
+        colorRamp.color_ramp.elements[index+1].color = colors['purple']
+    if i[1] == " Water (Valencia)":
+        print("yes")
+        index = pair_rof.index(i)
+        position = print(index)
+        colorRamp.color_ramp.elements[index+1].color = colors['blue']
+
+#gives the color from the colorRamp to be non-varying   
+colorRamp.color_ramp.interpolation = 'CONSTANT'
+#generates camera and positions it based on sized of largest radii 
+camera_data = bpy.data.cameras.new(name='Camera')
+camera_object = bpy.data.objects.new('Camera', camera_data)
+bpy.ops.object.camera_add(enter_editmode=False, align='VIEW', location=(0,0,rof+1.5), rotation=(0,0,0), scale=(1,1,1))
+#generates light to provide a more distinct visual when rendering
+bpy.ops.object.light_add(type='SUN',align='WORLD', location=(0,1,1), scale=(1,1,1))
+#gives rendering image background transparency 
+bpy.context.scene.render.film_transparent = True
